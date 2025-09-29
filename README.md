@@ -32,7 +32,14 @@ const TEST_WALLET: Pubkey = pubkey!("2AQdpHJ2JpcEgPiATUXjQxA8QmafFegfQwSLWSprPic
 
 #[tokio::main]
 async fn main() {
-    let jupiter_swap_api_client = JupiterSwapApiClient::new("https://quote-api.jup.ag/v6");
+    // Basic usage (backward compatible)
+    let jupiter_swap_api_client = JupiterSwapApiClient::new("https://quote-api.jup.ag/v6".to_string());
+    
+    // Or with API key for better performance:
+    // let jupiter_swap_api_client = JupiterSwapApiClient::new_with_api_key(
+    //     "https://quote-api.jup.ag/v6".to_string(),
+    //     "your-api-key-here".to_string()
+    // );
 
     let quote_request = QuoteRequest {
         amount: 1_000_000,
@@ -75,13 +82,44 @@ async fn main() {
 ```
 For the full example, please refer to the [examples](../example/) directory in this repository.
 
+### Using Environment Variables
+
+Configure the client using environment variables:
+
+```bash
+# Set custom API base URL 
+API_BASE_URL=https://quote-api.jup.ag/v6
+
+# Set Jupiter API key for authenticated requests (optional)
+JUPITER_API_KEY=your-api-key-here
+```
+
+Example usage with environment variables:
+
+```rust
+use std::env;
+
+let api_base_url = env::var("API_BASE_URL").unwrap_or("https://quote-api.jup.ag/v6".to_string());
+let api_key = env::var("JUPITER_API_KEY").ok();
+
+let jupiter_swap_api_client = match api_key {
+    Some(key) => JupiterSwapApiClient::new_with_api_key(api_base_url, key),
+    None => JupiterSwapApiClient::new(api_base_url),
+};
+```
+
+### API Key Support
+
+**New Feature**: The client now supports Jupiter API keys for better performance and reliability.
+
+- **Without API key**: Use `JupiterSwapApiClient::new(base_url)` (backward compatible)
+- **With API key**: Use `JupiterSwapApiClient::new_with_api_key(base_url, api_key)`
+
+When an API key is provided, it's automatically added to requests via the `x-api-key` header.
+
 ### Using Self-hosted APIs
 
-You can set custom URLs via environment variables for any self-hosted Jupiter APIs. Like the [V6 Swap API](https://station.jup.ag/docs/apis/self-hosted) or the [paid hosted APIs](#paid-hosted-apis). Here are the ENV vars:
-
-```
-API_BASE_URL=https://hosted.api
-```
+You can set custom URLs via environment variables for any self-hosted Jupiter APIs. Like the [V6 Swap API](https://station.jup.ag/docs/apis/self-hosted) or the [paid hosted APIs](#paid-hosted-apis).
 
 ### Paid Hosted APIs
 
