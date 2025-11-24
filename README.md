@@ -92,6 +92,10 @@ API_BASE_URL=https://quote-api.jup.ag/v6
 
 # Set Jupiter API key for authenticated requests (optional)
 JUPITER_API_KEY=your-api-key-here
+
+# Configure HTTP client timeouts (optional)
+JUPITER_REQUEST_TIMEOUT_SECS=3      # Request timeout in seconds (default: 3)
+JUPITER_CONNECTION_TIMEOUT_SECS=1800 # Connection timeout in seconds (default: 1800, 30 minutes)
 ```
 
 Example usage with environment variables:
