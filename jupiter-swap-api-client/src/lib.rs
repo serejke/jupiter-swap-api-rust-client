@@ -61,14 +61,25 @@ impl JupiterSwapApiClient {
 
     // Build optimized HTTP client with performance settings for connection reuse
     fn build_optimized_client(api_key: Option<&str>) -> Client {
+        // Read timeout values from environment variables with fallback to defaults
+        let request_timeout = std::env::var("JUPITER_REQUEST_TIMEOUT_SECS")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(3);
+            
+        let connection_idle_timeout = std::env::var("JUPITER_CONNECTION_TIMEOUT_SECS")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(1800);
+
         let mut client_builder = Client::builder()
             // Timeout settings to prevent hanging requests
-            .timeout(Duration::from_secs(30))           // Overall request timeout
-            .connect_timeout(Duration::from_secs(10))   // Connection establishment timeout
+            .timeout(Duration::from_secs(request_timeout))           // Overall request timeout
+            .connect_timeout(Duration::from_secs(5))   // Connection establishment timeout
             
             // Connection pooling for reusing TCP/TLS connections
             .pool_max_idle_per_host(10)                 // Max 10 idle connections per host
-            .pool_idle_timeout(Duration::from_secs(90)) // Keep connections alive for 90 seconds
+            .pool_idle_timeout(Duration::from_secs(connection_idle_timeout)) // Keep connections alive for 90 seconds
             
             // HTTP/2 optimizations for request multiplexing
             .http2_adaptive_window(true)
