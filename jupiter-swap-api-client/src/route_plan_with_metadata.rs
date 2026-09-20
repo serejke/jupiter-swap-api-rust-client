@@ -10,7 +10,17 @@ pub type RoutePlanWithMetadata = Vec<RoutePlanStep>;
 #[serde(rename_all = "camelCase")]
 pub struct RoutePlanStep {
     pub swap_info: SwapInfo,
-    pub percent: u8,
+    /// Share of the input routed through this step, as a whole percent.
+    ///
+    /// Optional because the routing algorithm introduced with `instructionVersion=V2`
+    /// reports `null` here and states the share in `bps` instead. A step that carries
+    /// neither is a routing response this client does not understand.
+    #[serde(default)]
+    pub percent: Option<u8>,
+    /// Share of the input routed through this step, in basis points (`10000` = 100%).
+    /// Canonical since `instructionVersion=V2`; absent on older responses.
+    #[serde(default)]
+    pub bps: Option<u16>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
