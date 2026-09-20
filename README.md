@@ -1,30 +1,67 @@
-# jup-swap-api-client
+# jupiter-swap-api-client
 
-## Introduction
+A Rust client for the [Jupiter](https://jup.ag/) quote and swap APIs: quote a swap,
+get a built transaction back, and send it yourself.
 
-The `jup-swap-api-client` is a Rust client library designed to simplify the integration of the Jupiter Swap API, enabling seamless swaps on the Solana blockchain.
+This is a fork of [`jup-ag/jupiter-swap-api-client`](https://github.com/jup-ag/jupiter-swap-api-client),
+which is **no longer maintained** — its `main` branch has not moved since December 2025,
+its open pull requests go unreviewed, and the published crate still pins Solana 2.x.
+Jupiter itself no longer documents a Rust path at all; the API is REST/JSON and the
+official examples are JavaScript, Python and curl. So this fork exists to keep a working
+Rust client alive, not to stage changes for upstream.
 
-## Getting Started
+## What this fork changes
 
-To use the `jup-swap-api-client` crate in your Rust project, follow these simple steps:
+Request and response coverage upstream lacks:
 
-Add the crate to your `Cargo.toml`:
+- `prioritizationFeeLamports` and `dynamicComputeUnitLimit` on `/swap`
+- `blockhashSlotsToExpiry` on `/swap`
+- `excludeDexes` under its correct name, with `dexes`/`excludeDexes` serialized as
+  comma-separated strings rather than repeated query parameters
 
-    ```toml
-    [dependencies]
-    jup-swap-api-client = "0.1.0"
-    ```
+Client behavior:
 
-## Examples
+- an optional Jupiter API key, sent as the `x-api-key` header
+- one `reqwest::Client` built once and reused, so connections are pooled
+- request and idle-connection timeouts, configurable by environment variable
 
-Here's a simplified example of how to use the `jup-swap-api-client` in your Rust application:
+Kept current against the live API:
+
+- `feeAmount` and `feeMint` in `routePlan[].swapInfo` are `Option`. Jupiter deprecated
+  both in November 2025 — first reporting `0` and the input mint, then omitting them
+  entirely — and the fee is already accounted for in `outAmount`. Without this, a quote
+  from the live API does not deserialize.
+- `routePlan[].percent` is `Option`, and `bps` sits alongside it. The routing algorithm
+  behind `instructionVersion=V2` reports `percent: null` and states the share in basis
+  points instead.
+- The Solana dependencies are the granular crates matched to the 4.3 client train, not
+  the `solana-sdk` umbrella. The library needs only `solana-pubkey` and
+  `solana-instruction`.
+
+## Transaction versions
+
+The library is transaction-version agnostic: `SwapResponse::swap_transaction` is raw
+bytes, and nothing here decodes them. That matters for **transaction v1** (SIMD-0385),
+which writes its signatures last, as a fixed-length array sized by the message header.
+Serde's derived layout — signatures first, behind a `short_vec` length prefix — cannot
+express that, so `bincode` cannot read a v1 transaction even though it still compiles
+against `VersionedTransaction`.
+
+Decode with [`wincode`](https://crates.io/crates/wincode), as the example does:
+
+```rust
+let transaction: VersionedTransaction =
+    wincode::deserialize(&swap_response.swap_transaction)?;
+```
+
+## Usage
 
 ```rust
 use jupiter_swap_api_client::{
     quote::QuoteRequest, swap::SwapRequest, transaction_config::TransactionConfig,
     JupiterSwapApiClient,
 };
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::{pubkey, Pubkey};
 
 const USDC_MINT: Pubkey = pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 const NATIVE_MINT: Pubkey = pubkey!("So11111111111111111111111111111111111111112");
@@ -32,29 +69,22 @@ const TEST_WALLET: Pubkey = pubkey!("2AQdpHJ2JpcEgPiATUXjQxA8QmafFegfQwSLWSprPic
 
 #[tokio::main]
 async fn main() {
-    // Basic usage (backward compatible)
-    let jupiter_swap_api_client = JupiterSwapApiClient::new("https://quote-api.jup.ag/v6".to_string());
-    
-    // Or with API key for better performance:
-    // let jupiter_swap_api_client = JupiterSwapApiClient::new_with_api_key(
-    //     "https://quote-api.jup.ag/v6".to_string(),
-    //     "your-api-key-here".to_string()
-    // );
+    let client = JupiterSwapApiClient::new("https://api.jup.ag/swap/v1".to_string());
+    // or, with a key:
+    // let client = JupiterSwapApiClient::new_with_api_key(base_url, api_key);
 
-    let quote_request = QuoteRequest {
-        amount: 1_000_000,
-        input_mint: USDC_MINT,
-        output_mint: NATIVE_MINT,
-        slippage_bps: 50,
-        ..QuoteRequest::default()
-    };
+    let quote_response = client
+        .quote(&QuoteRequest {
+            amount: 1_000_000,
+            input_mint: USDC_MINT,
+            output_mint: NATIVE_MINT,
+            slippage_bps: 50,
+            ..QuoteRequest::default()
+        })
+        .await
+        .unwrap();
 
-    // GET /quote
-    let quote_response = jupiter_swap_api_client.quote(&quote_request).await.unwrap();
-    println!("{quote_response:#?}");
-
-    // POST /swap
-    let swap_response = jupiter_swap_api_client
+    let swap_response = client
         .swap(&SwapRequest {
             user_public_key: TEST_WALLET,
             quote_response: quote_response.clone(),
@@ -63,12 +93,10 @@ async fn main() {
         .await
         .unwrap();
 
-    println!("Raw tx len: {}", swap_response.swap_transaction.len());
+    println!("raw tx len: {}", swap_response.swap_transaction.len());
 
-    // Perform further actions as needed...
-
-    // POST /swap-instructions
-    let swap_instructions = jupiter_swap_api_client
+    // POST /swap-instructions, when you would rather assemble the transaction yourself
+    let swap_instructions = client
         .swap_instructions(&SwapRequest {
             user_public_key: TEST_WALLET,
             quote_response,
@@ -78,58 +106,45 @@ async fn main() {
         .unwrap();
     println!("{swap_instructions:#?}");
 }
-
-```
-For the full example, please refer to the [examples](../example/) directory in this repository.
-
-### Using Environment Variables
-
-Configure the client using environment variables:
-
-```bash
-# Set custom API base URL 
-API_BASE_URL=https://quote-api.jup.ag/v6
-
-# Set Jupiter API key for authenticated requests (optional)
-JUPITER_API_KEY=your-api-key-here
-
-# Configure HTTP client timeouts (optional)
-JUPITER_REQUEST_TIMEOUT_SECS=3      # Request timeout in seconds (default: 3)
-JUPITER_CONNECTION_TIMEOUT_SECS=1800 # Connection timeout in seconds (default: 1800, 30 minutes)
 ```
 
-Example usage with environment variables:
+The full program, including signing and sending, is in [`example/`](./example/).
 
-```rust
-use std::env;
+## Endpoints
 
-let api_base_url = env::var("API_BASE_URL").unwrap_or("https://quote-api.jup.ag/v6".to_string());
-let api_key = env::var("JUPITER_API_KEY").ok();
+| Base URL | Notes |
+| --- | --- |
+| `https://api.jup.ag/swap/v1` | Current. Keyless requests are rate limited; an API key raises the limit. |
+| `https://lite-api.jup.ag/swap/v1` | Keyless tier. A deprecation was announced for 31 January 2026 and then postponed with no new date. |
+| `https://quote-api.jup.ag/v6` | **Dead.** The host no longer resolves in DNS. |
 
-let jupiter_swap_api_client = match api_key {
-    Some(key) => JupiterSwapApiClient::new_with_api_key(api_base_url, key),
-    None => JupiterSwapApiClient::new(api_base_url),
-};
-```
+Self-hosted and paid-hosted deployments work the same way — point the base URL at them.
 
-### API Key Support
+## Environment variables
 
-**New Feature**: The client now supports Jupiter API keys for better performance and reliability.
+The example reads these; the library takes the base URL and key as constructor arguments.
 
-- **Without API key**: Use `JupiterSwapApiClient::new(base_url)` (backward compatible)
-- **With API key**: Use `JupiterSwapApiClient::new_with_api_key(base_url, api_key)`
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `API_BASE_URL` | `https://api.jup.ag/swap/v1` | API base URL |
+| `JUPITER_API_KEY` | unset | Sent as `x-api-key` when present |
+| `JUPITER_REQUEST_TIMEOUT_SECS` | `3` | Per-request timeout |
+| `JUPITER_CONNECTION_TIMEOUT_SECS` | `1800` | Idle-connection pool timeout |
 
-When an API key is provided, it's automatically added to requests via the `x-api-key` header.
+## Keeping up with Jupiter
 
-### Using Self-hosted APIs
+Because upstream will not do it, these are what to watch:
 
-You can set custom URLs via environment variables for any self-hosted Jupiter APIs. Like the [V6 Swap API](https://station.jup.ag/docs/apis/self-hosted) or the [paid hosted APIs](#paid-hosted-apis).
+- the OpenAPI specs, which are the earliest machine-readable signal of a field being
+  added, removed, or dropped from `required` — this is where `feeAmount`'s demotion
+  showed up first
+- Jupiter's changelog, posted monthly, where breaking changes and their deadlines land
+- `lite-api.jup.ag` liveness, since its deprecation is postponed rather than cancelled
+- Swap API v2 (`/order`, `/build`), which Jupiter now recommends over v1 and which this
+  client does not implement. Note that v2 instructions do not emit fee events, so any
+  downstream parser reading fee transfers has to switch to token balance deltas.
 
-### Paid Hosted APIs
+## Additional resources
 
-You can also check out some of the [paid hosted APIs](https://station.jup.ag/docs/apis/self-hosted#paid-hosted-apis).
-
-## Additional Resources
-
-- [Jupiter Swap API Documentation](https://station.jup.ag/docs/v6/swap-api): Learn more about the Jupiter Swap API and its capabilities.
-- [jup.ag Website](https://jup.ag/): Explore the official website for additional information and resources.
+- [Jupiter developer docs](https://developers.jup.ag/)
+- [jup.ag](https://jup.ag/)
