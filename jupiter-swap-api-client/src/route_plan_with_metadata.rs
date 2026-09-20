@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 
-use crate::serde_helpers::field_as_string;
+use crate::serde_helpers::{field_as_string, option_field_as_string};
 
 /// Topologically sorted DAG with additional metadata for rendering
 pub type RoutePlanWithMetadata = Vec<RoutePlanStep>;
@@ -29,8 +29,13 @@ pub struct SwapInfo {
     /// An estimation of the output amount into the AMM
     #[serde(with = "field_as_string")]
     pub out_amount: u64,
-    #[serde(with = "field_as_string")]
-    pub fee_amount: u64,
-    #[serde(with = "field_as_string")]
-    pub fee_mint: Pubkey,
+    /// Deprecated by Jupiter and absent from live `/quote` responses since
+    /// November 2025: first reported as `0` and the input mint, then dropped
+    /// from the payload entirely. The fee is already accounted for in
+    /// `out_amount`. Optional so a response without the field still decodes.
+    #[serde(default, with = "option_field_as_string")]
+    pub fee_amount: Option<u64>,
+    /// Deprecated by Jupiter, as `fee_amount`.
+    #[serde(default, with = "option_field_as_string")]
+    pub fee_mint: Option<Pubkey>,
 }
