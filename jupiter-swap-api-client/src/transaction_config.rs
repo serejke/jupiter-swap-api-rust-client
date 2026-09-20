@@ -1,5 +1,5 @@
 use serde::{Deserialize, Deserializer, Serialize};
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 
 use crate::serde_helpers::option_field_as_string;
 

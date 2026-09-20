@@ -3,10 +3,19 @@ members = [
     "jupiter-swap-api-client",
     "example",
 ]
+resolver = "2"
 
 [workspace.package]
 edition = "2021"
 
+# The granular Solana crates, not the `solana-sdk` umbrella. The umbrella's 5.0 line
+# requires solana-transaction/solana-message 5.x while the 4.3 client train requires
+# 4.x, so depending on both yields two incompatible `VersionedTransaction` types.
+# Everything here follows the client train.
 [workspace.dependencies]
-solana-sdk = "=2.1"
-solana-client = "=2.1"
+solana-instruction = "3.5"
+solana-pubkey = "4.3"
+solana-rpc-client = "4.3"
+solana-signer = "3.0"
+solana-transaction = { version = "4.3", features = ["wincode"] }
+wincode = "0.6"

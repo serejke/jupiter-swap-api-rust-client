@@ -1,14 +1,15 @@
 [package]
 name = "jupiter-swap-api-client"
 version = "0.1.0"
-description = ""
+description = "HTTP client for the Jupiter quote and swap APIs."
 edition = { workspace = true }
 
 [dependencies]
 anyhow = "1"
+base64 = "0.22"
+reqwest = { version = "0.12", features = ["json", "gzip"] }
 serde = { version = "1.0.159", features = ["derive"] }
 serde_json = "1.0.95"
-solana-sdk = { workspace = true }
-base64 = "0.13.1"
-serde_qs = "0.12.0"
-reqwest = { version = "0.11.20", features = ["json"] }
+serde_qs = "0.13"
+solana-instruction = { workspace = true }
+solana-pubkey = { workspace = true }

@@ -7,7 +7,7 @@ use crate::route_plan_with_metadata::RoutePlanWithMetadata;
 use crate::serde_helpers::{field_as_string, option_field_as_string, vec_as_comma_separated};
 use anyhow::{anyhow, Error};
 use serde::{Deserialize, Serialize};
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]

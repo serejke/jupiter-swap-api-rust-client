@@ -2,10 +2,8 @@ use crate::{
     quote::QuoteResponse, serde_helpers::field_as_string, transaction_config::TransactionConfig,
 };
 use serde::{Deserialize, Serialize};
-use solana_sdk::{
-    instruction::{AccountMeta, Instruction},
-    pubkey::Pubkey,
-};
+use solana_instruction::{AccountMeta, Instruction};
+use solana_pubkey::Pubkey;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -27,6 +25,7 @@ pub struct SwapResponse {
 
 mod base64_deserialize {
     use super::*;
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
     use serde::{de, Deserializer};
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
@@ -34,7 +33,8 @@ mod base64_deserialize {
         D: Deserializer<'de>,
     {
         let swap_transaction_string = String::deserialize(deserializer)?;
-        base64::decode(swap_transaction_string)
+        STANDARD
+            .decode(swap_transaction_string)
             .map_err(|e| de::Error::custom(format!("base64 decoding error: {:?}", e)))
     }
 }

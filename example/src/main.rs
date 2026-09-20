@@ -4,10 +4,10 @@ use jupiter_swap_api_client::{
     quote::QuoteRequest, swap::SwapRequest, transaction_config::TransactionConfig,
     JupiterSwapApiClient,
 };
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::{pubkey, transaction::VersionedTransaction};
-use solana_sdk::{pubkey::Pubkey, signature::NullSigner};
-use tokio;
+use solana_signer::null_signer::NullSigner;
+use solana_pubkey::{pubkey, Pubkey};
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+use solana_transaction::versioned::VersionedTransaction;
 
 const USDC_MINT: Pubkey = pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 const NATIVE_MINT: Pubkey = pubkey!("So11111111111111111111111111111111111111112");
@@ -16,7 +16,8 @@ pub const TEST_WALLET: Pubkey = pubkey!("2AQdpHJ2JpcEgPiATUXjQxA8QmafFegfQwSLWSp
 
 #[tokio::main]
 async fn main() {
-    let api_base_url = env::var("API_BASE_URL").unwrap_or("https://quote-api.jup.ag/v6".into());
+    let api_base_url =
+        env::var("API_BASE_URL").unwrap_or("https://api.jup.ag/swap/v1".into());
     let api_key = env::var("JUPITER_API_KEY").ok();
     
     println!("Using base url: {}", api_base_url);
@@ -50,8 +51,11 @@ async fn main() {
 
     println!("Raw tx len: {}", swap_response.swap_transaction.len());
 
+    // `wincode`, not `bincode`: a v1 transaction writes its signatures last, as a
+    // fixed-length array sized by the message header, which serde's derived layout
+    // (signatures first, behind a `short_vec` length prefix) cannot express.
     let versioned_transaction: VersionedTransaction =
-        bincode::deserialize(&swap_response.swap_transaction).unwrap();
+        wincode::deserialize(&swap_response.swap_transaction).unwrap();
 
     // Replace with a keypair or other struct implementing signer
     let null_signer = NullSigner::new(&TEST_WALLET);
